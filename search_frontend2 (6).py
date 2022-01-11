@@ -5,6 +5,8 @@ from inverted_index_gcp import *
 import os
 from google.cloud import storage
 
+
+
 #body inverted index
 os.environ["GCLOUD_PROJECT"] = "ass3-334513"
 bucket_name = "body_index_shani_noa2"
@@ -71,11 +73,13 @@ def search():
               posting_list.append((doc_id, tf)) 
       for docid, appearances in posting_list:
           if docid not in mydict.keys():
-              mydict[docid] = appearances +(pageview[docid]/max_pageview)
+              mydict[docid] = appearances +(pageview[docid]/max_pageview) + (inverted.id_title[docid]).lower().count(q.lower())*150-(len(inverted.id_title[docid])*2)
           else:
-              mydict[docid] = mydict[docid]+appearances
+              mydict[docid] = mydict[docid]+appearances+ inverted.id_title[docid].lower().count(q)*150-(len(inverted.id_title[docid])*2)
     appearances_per_doc = [(key,val) for key,val in mydict.items()]
     sorted_appearances = sorted(appearances_per_doc, key = lambda x: x[1],reverse=True)
+    if len(sorted_appearances)>100:
+      sorted_appearances = sorted_appearances[:100]
     for doc in sorted_appearances:
       title = inverted.id_title[doc[0]]
       res.append((doc[0],title))
@@ -145,10 +149,11 @@ def search_title():
               tf = int.from_bytes(b[i*6+4:(i+1)*6], 'big')
               posting_list.append((doc_id, tf)) 
       for docid, appearances in posting_list:
+        if (inverted.id_title[docid]).lower().count(q.lower())>0:
           if docid not in mydict.keys():
-              mydict[docid] = appearances
+              mydict[docid] = 1
           else:
-              mydict[docid] = mydict[docid]+appearances
+              mydict[docid] = mydict[docid]+1
     appearances_per_doc = [(key,val) for key,val in mydict.items()]
     sorted_appearances = sorted(appearances_per_doc, key = lambda x: x[1],reverse=True)
     for doc in sorted_appearances:
@@ -232,14 +237,14 @@ def get_pageview():
     if len(wiki_ids) == 0:
       return jsonify(res)
     # BEGIN SOLUTION
-    
+    for id in wiki_ids:
+      res.append(pageview[id])
     # END SOLUTION
     return jsonify(res)
 
         
 def read_posting_list(inverted, w):
   locs = inverted.posting_locs[w]
-  print("in read posting" + str(inverted.df["chocolate"]))
   with closing(MultiFileReader()) as reader:
     b = reader.read(locs, inverted.df[w] * 6) 
     posting_list = []
@@ -251,4 +256,4 @@ def read_posting_list(inverted, w):
 
 if __name__ == '__main__':
     # run the Flask RESTful API, make the server publicly available (host='0.0.0.0') on port 8080
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=False)
