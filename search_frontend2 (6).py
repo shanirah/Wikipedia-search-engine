@@ -4,6 +4,7 @@ import pickle
 from inverted_index_gcp import *
 import os
 from google.cloud import storage
+import math
 remove =["#","@","?","!","$","%","^","*","&","(",")","-","=","+","/",".",",",":","\",","|","]","[","{","}","<",">",";","_", "'", "\"" ]
 
 
@@ -70,16 +71,21 @@ def search():
       with closing(MultiFileReader()) as reader:
           b = reader.read(locs, inverted.df[q] * 6) 
           posting_list = []
+          tf_idf = {}
+          idfdict = {}
           for i in range(inverted.df[q]):
               doc_id = int.from_bytes(b[i*6:i*6+4], 'big')
               tf = int.from_bytes(b[i*6+4:(i+1)*6], 'big')
+              idfdict[doc_id] = math.log(1 + len(inverted.DL)/(1 + inverted.df[q]), 10) + 1
+              idf = math.log(1 + len(inverted.DL)/(1 + inverted.df[q]), 10) + 1
+              tf_idf[doc_id] = tf*idf
               posting_list.append((doc_id, tf)) 
       for docid, appearances in posting_list:
           if docid not in mydict.keys():
-              mydict[docid] = appearances + (inverted.id_title[docid]).lower().count(q.lower())*150-(len(inverted.id_title[docid])*2)
+              mydict[docid] = tf_idf[docid] + (inverted.id_title[docid]).lower().count(q)*idfdict[docid]*200
               #mydict[docid] = appearances +(pageview[docid]/max_pageview) + (inverted.id_title[docid]).lower().count(q.lower())*150-(len(inverted.id_title[docid])*2)
           else:
-              mydict[docid] = mydict[docid]+appearances+ inverted.id_title[docid].lower().count(q)*150-(len(inverted.id_title[docid])*2)
+              mydict[docid] = 200+mydict[docid]+tf_idf[docid]+ inverted.id_title[docid].lower().count(q)*idfdict[docid]*200
     appearances_per_doc = [(key,val) for key,val in mydict.items()]
     sorted_appearances = sorted(appearances_per_doc, key = lambda x: x[1],reverse=True)
     if len(sorted_appearances)>100:
@@ -261,6 +267,8 @@ def read_posting_list(inverted, w):
       tf = int.from_bytes(b[i*6+4:(i+1)*6], 'big')
       posting_list.append((doc_id, tf))
   return posting_list
+
+
 
 if __name__ == '__main__':
     # run the Flask RESTful API, make the server publicly available (host='0.0.0.0') on port 8080
