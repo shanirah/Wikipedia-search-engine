@@ -58,9 +58,9 @@ def search():
     # BEGIN SOLUTION
     query = [query]
     query = query[0].split()
-    #query = [RE_WORD.finditer(q) for q in query]
     mydict = {} 
     for q in query:
+      q = q.lower()
       for r in remove:
         while q.count(r)>0:
           q=q.replace(r,'')
@@ -142,6 +142,7 @@ def search_title():
     query = query[0].split()
     mydict = {} 
     for q in query:
+      q = q.lower()
       for r in remove:
         while q.count(r)>0:
           q=q.replace(r,'')
