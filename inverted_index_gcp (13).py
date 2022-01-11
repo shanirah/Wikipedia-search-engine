@@ -15,7 +15,9 @@ from collections import defaultdict
 from contextlib import closing
 
 
-# Let's start with a small block size of 30 bytes just to test things out. 
+
+
+
 BLOCK_SIZE = 1999998
 
 class MultiFileWriter:
@@ -71,7 +73,7 @@ class MultiFileReader:
         b = []
         for f_name, offset in locs:
             if f_name not in self._open_files:
-                self._open_files[f_name] = open('/content/postings_gcp/'+f_name, 'rb')
+                self._open_files[f_name] = open('postings_gcp/'+f_name, 'rb')
             f = self._open_files[f_name]
             f.seek(offset)
             n_read = min(n_bytes, BLOCK_SIZE - offset)
