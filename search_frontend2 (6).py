@@ -5,26 +5,27 @@ from inverted_index_gcp import *
 import os
 from google.cloud import storage
 import math
+import gzip
+
+#relevant stopwords to remove from the query words
 remove =["#","@","?","!","$","%","^","*","&","(",")","-","=","+","/",".",",",":","\",","|","]","[","{","}","<",">",";","_", "'", "\"" ]
 
-
-#body inverted index
+#reading body inverted index to inverted
 os.environ["GCLOUD_PROJECT"] = "ass3-334513"
 bucket_name = "body_index_shani_noa2"
 client = storage.Client()
 bucket = client.bucket(bucket_name)
-index_name = "index.pkl"
+index_name = "index.pkl" #our body index cotains also titles in id_title dict, we are using it in the search title function. 
 blob_index = bucket.blob(f"postings_gcp/{index_name}")
 pickle_in = blob_index.download_as_string()
 inverted = pickle.loads(pickle_in)
 
-#pageviews
+#reading pageviews
 f_name = "pageviews-202108-user.pkl"
-#f = open(f_name, 'rb')
-#pageview = pickle.load(f)
-#pageview_list = [(key,val) for key,val in pageview.items()]
-#pageview_sorted = sorted(pageview_list, key = lambda x: x[1],reverse=True)[:100]
-#max_pageview = 8000000
+f = open(f_name, 'rb')
+pageview = pickle.load(f)
+pageview_list = [(key,val) for key,val in pageview.items()]
+pageview_sorted = sorted(pageview_list, key = lambda x: x[1],reverse=True)[:100]
 
 class MyFlaskApp(Flask):
     def run(self, host=None, port=None, debug=None, **options):
@@ -58,13 +59,13 @@ def search():
       return jsonify(res)
     # BEGIN SOLUTION
     query = [query]
-    query = query[0].split()
-    mydict = {} 
+    query = query[0].split() #convert query to list of words
+    mydict = {} #we are using this dict to calculate the final results
     for q in query:
-      q = q.lower()
+      q = q.lower() #convert each word of the query to lower case
       for r in remove:
         while q.count(r)>0:
-          q=q.replace(r,'')
+          q=q.replace(r,'') #removing punctuations from query words
       locs = inverted.posting_locs[q]
       if len(locs) == 0:
         continue
@@ -73,25 +74,24 @@ def search():
           posting_list = []
           tf_idf = {}
           idfdict = {}
-          for i in range(inverted.df[q]):
+          for i in range(inverted.df[q]): #reading postings list
               doc_id = int.from_bytes(b[i*6:i*6+4], 'big')
               tf = int.from_bytes(b[i*6+4:(i+1)*6], 'big')
               idfdict[doc_id] = math.log(1 + len(inverted.DL)/(1 + inverted.df[q]), 10) + 1
               idf = math.log(1 + len(inverted.DL)/(1 + inverted.df[q]), 10) + 1
               tf_idf[doc_id] = tf*idf
               posting_list.append((doc_id, tf)) 
-      for docid, appearances in posting_list:
+      for docid, appearances in posting_list: #calculate appearances per doc
           if docid not in mydict.keys():
               mydict[docid] = tf_idf[docid] + (inverted.id_title[docid]).lower().count(q)*idfdict[docid]*200
-              #mydict[docid] = appearances +(pageview[docid]/max_pageview) + (inverted.id_title[docid]).lower().count(q.lower())*150-(len(inverted.id_title[docid])*2)
           else:
               mydict[docid] = 200+mydict[docid]+tf_idf[docid]+ inverted.id_title[docid].lower().count(q)*idfdict[docid]*200
     appearances_per_doc = [(key,val) for key,val in mydict.items()]
     sorted_appearances = sorted(appearances_per_doc, key = lambda x: x[1],reverse=True)
     if len(sorted_appearances)>100:
-      sorted_appearances = sorted_appearances[:100]
+      sorted_appearances = sorted_appearances[:100] #return the first 100 results
     for doc in sorted_appearances:
-      title = inverted.id_title[doc[0]]
+      title = inverted.id_title[doc[0]] #get the title name from the dict of the index
       res.append((doc[0],title))
     # END SOLUTION
     return jsonify(res)
@@ -117,7 +117,47 @@ def search_body():
     if len(query) == 0:
       return jsonify(res)
     # BEGIN SOLUTION
-
+    query = [query]
+    query = query[0].split()
+    mydict = {} 
+    tfidfquery ={}
+    for q in query:
+      q=q.lower()
+      for r in remove: # remove punctuations before all calculations
+        while q.count(r)>0:
+          q=q.replace(r,'')
+      tfquery =query.count(q)
+      if q not in inverted.df.keys():
+          continue
+      idfquery = math.log(1 + len(inverted.DL)/(1 + inverted.df[q]), 10) + 1
+      tfifdq = tfquery* idfquery
+      locs = inverted.posting_locs[q]
+      if len(locs) == 0:
+        continue
+      with closing(MultiFileReader()) as reader:
+          b = reader.read(locs, inverted.df[q] * 6) 
+          posting_list = []
+          tf_idf = {}
+          idfdict = {}
+          for i in range(inverted.df[q]):
+              doc_id = int.from_bytes(b[i*6:i*6+4], 'big')
+              tf = int.from_bytes(b[i*6+4:(i+1)*6], 'big')
+              idfdict[doc_id] = math.log(1 + len(inverted.DL)/(1 + inverted.df[q]), 10) + 1
+              idf = math.log(1 + len(inverted.DL)/(1 + inverted.df[q]), 10) + 1
+              tf_idf[doc_id] = tf*idf
+              posting_list.append((doc_id, tf)) 
+      for docid, appearances in posting_list:
+          if docid not in mydict.keys():
+              mydict[docid] = tf_idf[docid] * tfifdq
+          else:
+              mydict[docid] =mydict[docid]+tf_idf[docid] * tfifdq
+    appearances_per_doc = [(key,val) for key,val in mydict.items()]
+    sorted_appearances = sorted(appearances_per_doc, key = lambda x: x[1],reverse=True)
+    if len(sorted_appearances)>100:
+      sorted_appearances = sorted_appearances[:100]
+    for doc in sorted_appearances:
+      title = inverted.id_title[doc[0]]
+      res.append((doc[0],title))
     # END SOLUTION
     return jsonify(res)
 
@@ -251,8 +291,8 @@ def get_pageview():
     if len(wiki_ids) == 0:
       return jsonify(res)
     # BEGIN SOLUTION
-    #for id in wiki_ids:
-    #  res.append(pageview[id])
+    for id in wiki_ids:
+      res.append(pageview[id])
     # END SOLUTION
     return jsonify(res)
 
