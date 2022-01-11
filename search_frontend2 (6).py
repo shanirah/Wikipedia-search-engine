@@ -4,7 +4,7 @@ import pickle
 from inverted_index_gcp import *
 import os
 from google.cloud import storage
-
+remove =["#","@","?","!","$","%","^","*","&","(",")","-","=","+","/",".",",",":","\",","|","]","[","{","}","<",">",";","_", "'", "\"" ]
 
 
 #body inverted index
@@ -19,12 +19,11 @@ inverted = pickle.loads(pickle_in)
 
 #pageviews
 f_name = "pageviews-202108-user.pkl"
-f = open(f_name, 'rb')
-pageview = pickle.load(f)
-pageview_list = [(key,val) for key,val in pageview.items()]
-pageview_sorted = sorted(pageview_list, key = lambda x: x[1],reverse=True)[:100]
-max_pageview = pageview_sorted[1][1]
-
+#f = open(f_name, 'rb')
+#pageview = pickle.load(f)
+#pageview_list = [(key,val) for key,val in pageview.items()]
+#pageview_sorted = sorted(pageview_list, key = lambda x: x[1],reverse=True)[:100]
+#max_pageview = 8000000
 
 class MyFlaskApp(Flask):
     def run(self, host=None, port=None, debug=None, **options):
@@ -59,8 +58,12 @@ def search():
     # BEGIN SOLUTION
     query = [query]
     query = query[0].split()
+    #query = [RE_WORD.finditer(q) for q in query]
     mydict = {} 
     for q in query:
+      for r in remove:
+        while q.count(r)>0:
+          q=q.replace(r,'')
       locs = inverted.posting_locs[q]
       if len(locs) == 0:
         continue
@@ -73,7 +76,8 @@ def search():
               posting_list.append((doc_id, tf)) 
       for docid, appearances in posting_list:
           if docid not in mydict.keys():
-              mydict[docid] = appearances +(pageview[docid]/max_pageview) + (inverted.id_title[docid]).lower().count(q.lower())*150-(len(inverted.id_title[docid])*2)
+              mydict[docid] = appearances + (inverted.id_title[docid]).lower().count(q.lower())*150-(len(inverted.id_title[docid])*2)
+              #mydict[docid] = appearances +(pageview[docid]/max_pageview) + (inverted.id_title[docid]).lower().count(q.lower())*150-(len(inverted.id_title[docid])*2)
           else:
               mydict[docid] = mydict[docid]+appearances+ inverted.id_title[docid].lower().count(q)*150-(len(inverted.id_title[docid])*2)
     appearances_per_doc = [(key,val) for key,val in mydict.items()]
@@ -138,6 +142,9 @@ def search_title():
     query = query[0].split()
     mydict = {} 
     for q in query:
+      for r in remove:
+        while q.count(r)>0:
+          q=q.replace(r,'')
       locs = inverted.posting_locs[q]
       if len(locs) == 0:
         continue
@@ -237,8 +244,8 @@ def get_pageview():
     if len(wiki_ids) == 0:
       return jsonify(res)
     # BEGIN SOLUTION
-    for id in wiki_ids:
-      res.append(pageview[id])
+    #for id in wiki_ids:
+    #  res.append(pageview[id])
     # END SOLUTION
     return jsonify(res)
 
